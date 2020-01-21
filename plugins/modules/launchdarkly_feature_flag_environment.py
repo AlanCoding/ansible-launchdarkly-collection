@@ -132,16 +132,14 @@ from ansible.module_utils._text import to_native
 from ansible.module_utils.common._json_compat import json
 from ansible.module_utils.six import PY2, iteritems, string_types
 
-
-# from rule import rule_argument_spec
-# from base import configure_instance, _patch_path, _build_comment, _patch_op
-
 from ansible_collections.launchdarkly_labs.collection.plugins.module_utils.base import (
     configure_instance,
     _patch_path,
     _patch_op,
     _build_comment,
     fail_exit,
+    ld_common_argument_spec,
+    rego_test,
 )
 from ansible_collections.launchdarkly_labs.collection.plugins.module_utils.rule import (
     rule_argument_spec,
@@ -149,18 +147,13 @@ from ansible_collections.launchdarkly_labs.collection.plugins.module_utils.rule 
 
 
 def main():
-    module = AnsibleModule(
-        argument_spec=dict(
+    argument_spec = ld_common_argument_spec()
+    argument_spec.update(
+        dict(
             state=dict(
                 type="str",
                 default="present",
                 choices=["absent", "present", "enabled", "disabled"],
-            ),
-            api_key=dict(
-                required=True,
-                type="str",
-                no_log=True,
-                fallback=(env_fallback, ["LAUNCHDARKLY_ACCESS_TOKEN"]),
             ),
             flag_key=dict(type="str", required=True),
             environment_key=dict(type="str", required=True),
@@ -208,6 +201,8 @@ def main():
         )
     )
 
+    module = AnsibleModule(argument_spec=argument_spec)
+
     if not HAS_LD:
         module.fail_json(
             msg=missing_required_lib("launchdarkly_api"), exception=LD_IMP_ERR
@@ -249,6 +244,9 @@ def _parse_flag_param(module, key, op="replace"):
 
 
 def _configure_feature_flag_env(module, api_instance, feature_flag=None):
+    if module.params["conftest"]["enabled"]:
+        rego_test(module)
+
     patches = []
 
     _toggle_flag(module, patches, feature_flag)
@@ -483,6 +481,7 @@ def _configure_feature_flag_env(module, api_instance, feature_flag=None):
                 "project_key",
                 "flag_key",
                 "comment",
+                "conftest"
             ]
             and module.params[key] is not None
         ):
